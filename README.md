@@ -16,7 +16,34 @@ Three more things come with it:
 
 ![An economy window built with guigen (preview)](docs/economy_overview.png)
 
-## Install
+## The exe (no Python needed)
+
+Two standalone Windows programs. They are x64, so they run on any Windows 10/11 PC; ARM PCs run them
+through Windows' built-in emulation.
+
+| exe | what it is | how to use it |
+|---|---|---|
+| `GUIGen.exe` | the desktop app | Double-click it, or drop a `.yaml` / `.py` spec onto it to open that spec. A `<spec>_mock.yaml` next to the spec is picked up too. |
+| `guigen-cli.exe` | the command line | Same commands as `guigen` below, e.g. `guigen-cli new XYZ`, `guigen-cli preview spec.yaml --mod <mod>`. |
+
+No install is needed: copy them anywhere.
+- The first start takes a few seconds while the exe unpacks itself.
+- The preview works before you pick a mod. Base-game sprites, fonts and loc are found
+  automatically.
+- Validate, diff and build need the mod folder.
+
+Python specs (`.py`) work too. They can import `guigen` and the standard modules guigen itself uses
+(`os`, `re`, `math` and so on).
+
+To build the exes yourself, use an x64 Python with `pip install pyinstaller pillow numpy pyyaml`:
+
+```bash
+python packaging/build_exe.py
+```
+
+The exes land in `dist/`.
+
+## Install as a Python package
 
 You need Python 3.10 or newer.
 

@@ -3,3 +3,5 @@ __pycache__/
 /preview/
 specs/**/preview/
 *.egg-info/
+build/
+dist/

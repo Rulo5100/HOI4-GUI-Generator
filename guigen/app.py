@@ -175,14 +175,26 @@ class App:
         finally:
             self.root.after(1000, self._poll)
 
-    def _need(self):
-        if not self.mod.get() or not os.path.isdir(self.mod.get()):
-            self.say("Pick the mod folder first (Mod ...).")
-            return False
+    def _need(self, mod=True):
+        """Check the inputs. Rendering works without a mod (base-game sprites, fonts and loc still apply);
+        validate / diff / build compare against the mod, so they need one."""
         if not self.spec.get() or not os.path.exists(self.spec.get()):
             self.say("Pick a spec (Spec ...) or create one (New ...).")
             return False
+        if mod and (not self.mod.get() or not os.path.isdir(self.mod.get())):
+            self.say("Pick the mod folder first (Mod ...).")
+            return False
         return True
+
+    def _mod_or_empty(self):
+        m = self.mod.get()
+        if m and os.path.isdir(m):
+            return m
+        if not getattr(self, "_empty_mod", None):
+            self._empty_mod = tempfile.mkdtemp(prefix="guigen_nomod_")
+            self.say("No mod folder picked: previewing without your mod's own sprites and loc (base-game ones still work). "
+                     "Pick it with Mod ... to validate, diff and build.")
+        return self._empty_mod
 
     # ------------------------------------------------------------------ build + render
     def _load(self, mod=None, spec=None):
@@ -203,13 +215,13 @@ class App:
         self.renderer = Renderer(self.project, self.fs, m, debug)
 
     def render(self, reload=False, reset_mock=False):
-        if not self._need() or self._busy:
+        if not self._need(mod=False) or self._busy:
             return
         self._busy = True
         self.status.set("rendering...")
         self.remember()
         # read every Tk variable here: the worker thread must not touch Tk
-        mod, spec, mock, sets = self.mod.get(), self.spec.get(), self.mock.get(), self.sets.get()
+        mod, spec, mock, sets = self._mod_or_empty(), self.spec.get(), self.mock.get(), self.sets.get()
         board, debug, tips = self.board.get(), self.debug.get(), self.tooltips.get()
 
         def work():
@@ -370,14 +382,41 @@ class App:
             self.say(f"saved {f}")
 
 
-def main():
+def main(argv=None):
+    """Open the app. A spec path (.yaml / .yml / .py) on the command line, e.g. a file dropped on
+    GUIGen.exe, is opened instead of the last one used (a mock next to it is picked up too)."""
     if tk is None:
         print("tkinter is not available in this Python; install the python.org build or use the command line.")
         return 1
+    argv = sys.argv[1:] if argv is None else argv
     root = tk.Tk()
-    App(root)
+    _set_icon(root)
+    app = App(root)
+    spec = next((a for a in argv if a.lower().endswith((".yaml", ".yml", ".py")) and os.path.exists(a)), None)
+    if spec:
+        app.spec.set(os.path.abspath(spec))
+        stem = os.path.splitext(os.path.abspath(spec))[0]
+        for cand in (stem + "_mock.yaml", os.path.join(os.path.dirname(spec), "mock.yaml")):
+            if os.path.exists(cand) and not cand.endswith(os.path.basename(spec)):
+                app.mock.set(cand)
+                break
+        app.board.set("")
+        app.load_editor()
+        app.render(reload=True)
     root.mainloop()
     return 0
+
+
+def _set_icon(root):
+    """Window icon: the bundled guigen.ico when frozen into an exe, else nothing."""
+    base = getattr(sys, "_MEIPASS", None)
+    if base:
+        ico = os.path.join(base, "guigen.ico")
+        if os.path.exists(ico):
+            try:
+                root.iconbitmap(ico)
+            except tk.TclError:
+                pass
 
 
 if __name__ == "__main__":
