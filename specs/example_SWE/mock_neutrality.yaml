@@ -1,0 +1,13 @@
+# Same state with the Neutrality tab open (SWE_ore_tab = 1)
+default_var: 0
+vars:
+  SWE_ore_tab: 1
+  SWE_ore_shipped: 8400
+  SWE_buy_ger: 64
+  SWE_buy_eng: 28
+  SWE_buy_sov: 8
+  SWE_ships: 5
+  SWE_neutrality: 47
+  SWE_axis_pressure: 35
+  SWE_allied_pressure: 81
+  political_power: 42

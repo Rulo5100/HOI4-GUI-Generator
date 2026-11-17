@@ -1,0 +1,4 @@
+# the seed scripts are kept byte for byte (CRLF, sha256 checked against the original folder)
+seed/** -text
+*.png binary
+*.dds binary

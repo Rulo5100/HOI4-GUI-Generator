@@ -1,0 +1,136 @@
+# Example country board in YAML: Swedish iron ore diplomacy.
+# A demo of the extras (theme, tabs, repeat rows, dial, gauges, pips, scripted loc); it is not wired
+# to any real Swedish content in the mod. Preview it without touching the mod:
+#
+#   python -m guigen preview specs/example_SWE/board.yaml --mod "<mod>" --mock specs/example_SWE/mock.yaml
+#
+project:
+  prefix: SWE
+  theme: {base: steel, bars: {ore: [176, 122, 70]}}
+  frame_effect: SWE_ore_refresh_frames
+
+sprites:
+  - {type: bar, name: bar_ore, w: 150, h: 14, colour: ore}
+  - {type: bar, name: bar_ore_small, w: 80, h: 10, colour: ore}
+  - {type: pips, name: ships, n: 8, frames: 9}
+  - {type: dial, name: neutrality}
+  - {type: gauge, name: pressure, low_t: 0.5, high_t: 0.75, low: [85, 170, 82], mid_from: [205, 160, 55], mid_to: [190, 55, 45], high: [190, 55, 45]}
+
+frames:
+  - {var: SWE_f_buy_ger, source: SWE_buy_ger}
+  - {var: SWE_f_buy_eng, source: SWE_buy_eng}
+  - {var: SWE_f_buy_sov, source: SWE_buy_sov}
+  - {var: SWE_f_ships, source: SWE_ships, frames: 9, hi: 8}
+  - {var: SWE_f_neutral, source: SWE_neutrality, frames: 21}
+  - {var: SWE_f_axis, source: SWE_axis_pressure}
+  - {var: SWE_f_allied, source: SWE_allied_pressure}
+
+boards:
+  - name: SWE_ore_board
+    context: decision_category
+    x: 10
+    gap: 4
+    elements:
+      - header: {name: SWE_ore, emblem: GFX_goal_generic_trade, help: SWE_ORE_HELP_TT, title: SWE_ORE_TITLE, subs: [SWE_ORE_SUB1, "[ROOT.GetSWEOreMood]"]}
+      - tabs:
+          var: SWE_ore_tab
+          height: 210
+          refresh: SWE_ore_refresh_frames = yes
+          tabs:
+            - key: exports
+              label: SWE_TAB_EXPORTS
+              elements:
+                - row:
+                    y: 0
+                    items:
+                      - text: {name: SWE_h_buyer, text: SWE_H_BUYER, w: 140}
+                      - text: {name: SWE_h_share, text: SWE_H_SHARE, w: 150, x: 160}
+                      - text: {name: SWE_h_quota, text: SWE_H_QUOTA, w: 120, x: 330}
+                - repeat:
+                    for: {ger: Germany, eng: United Kingdom, sov: Soviet Union}
+                    as: k
+                    elements:
+                      - row:
+                          height: 26
+                          items:
+                            - text: {name: SWE_n_$k$, text: SWE_N_$k$, w: 140, tooltip: SWE_N_$k$_TT}
+                            - bar: {name: SWE_bar_$k$, x: 160, dy: 3, sprite: GFX_SWE_bar_ore, frame_var: SWE_f_buy_$k$}
+                            - text: {name: SWE_v_$k$, text: SWE_V_$k$, x: 316, w: 40}
+                            - button:
+                                name: SWE_raise_$k$
+                                x: 360
+                                dy: -4
+                                sprite: GFX_button_94x31
+                                scale: 0.85
+                                text: SWE_RAISE
+                                tooltip: SWE_RAISE_$k$_TT
+                                enabled: "has_political_power > 9.99 check_variable = { SWE_buy_$k$ < 100 }"
+                                click: "add_political_power = -10 add_to_variable = { SWE_buy_$k$ = 10 } SWE_ore_refresh_frames = yes"
+                                right_click: "subtract_from_variable = { SWE_buy_$k$ = 10 } clamp_variable = { var = SWE_buy_$k$ min = 0 max = 100 } SWE_ore_refresh_frames = yes"
+                - space: 8
+                - row:
+                    items:
+                      - text: {name: SWE_ships_l, text: SWE_SHIPS_L, w: 140, tooltip: SWE_SHIPS_TT}
+                      - bar: {name: SWE_ships, x: 160, sprite: GFX_SWE_ships, frame_var: SWE_f_ships, tooltip: SWE_SHIPS_TT}
+                      - text: {name: SWE_ships_v, text: SWE_SHIPS_V, x: 290, w: 60}
+            - key: neutrality
+              label: SWE_TAB_NEUTRAL
+              elements:
+                - bar: {name: SWE_dial, y: 0, sprite: GFX_SWE_neutrality, frame_var: SWE_f_neutral, tooltip: SWE_DIAL_TT}
+                - text: {name: SWE_dial_v, text: SWE_DIAL_V, x: 200, y: 6, w: 120, h: 30, font: hoi_24header}
+                - text: {name: SWE_dial_s, text: "[ROOT.GetSWENeutrality]", x: 200, y: 40, w: 290, h: 40}
+                - row:
+                    y: 108
+                    items:
+                      - text: {name: SWE_axis_l, text: SWE_AXIS_L, x: 10, w: 120, format: centre}
+                      - text: {name: SWE_allied_l, text: SWE_ALLIED_L, x: 140, w: 120, format: centre}
+                - row:
+                    items:
+                      - bar: {name: SWE_axis, x: 59, sprite: GFX_SWE_pressure, frame_var: SWE_f_axis, tooltip: SWE_AXIS_TT}
+                      - bar: {name: SWE_allied, x: 189, sprite: GFX_SWE_pressure, frame_var: SWE_f_allied, tooltip: SWE_ALLIED_TT}
+                      - text: {name: SWE_pressure_note, text: SWE_PRESSURE_NOTE, x: 290, w: 200, h: 80}
+
+loc:
+  SWE_ORE_TITLE: "§YThe Iron Ore Question§!"
+  SWE_ORE_SUB1: "Kiruna and Gällivare ore shipped: §Y[?SWE_ore_shipped|0]k§! tonnes this year"
+  SWE_ORE_HELP_TT: "§YThe Iron Ore Question§!\\n£white_dot Every buyer's §Yshare§! of the Kiruna ore earns £pol_power and goodwill\\n£white_dot A large share for one camp raises the other camp's §Lpressure§!\\n£white_dot Keep §Lneutrality§! above §Y50§! or face demands from both sides"
+  SWE_TAB_EXPORTS: "Exports"
+  SWE_TAB_NEUTRAL: "Neutrality"
+  SWE_H_BUYER: "§gBuyer§!"
+  SWE_H_SHARE: "§gShare of exports§!"
+  SWE_H_QUOTA: "§gQuota§!"
+  SWE_N_ger: "§CGermany§!"
+  SWE_N_eng: "§CUnited Kingdom§!"
+  SWE_N_sov: "§CSoviet Union§!"
+  SWE_N_ger_TT: "§CGermany§! takes ore through §CLuleå§! and, in winter, §CNarvik§!"
+  SWE_N_eng_TT: "The §CUnited Kingdom§! buys at a premium to keep it from Germany"
+  SWE_N_sov_TT: "The §CSoviet Union§! takes small lots for the Leningrad works"
+  SWE_V_ger: "[?SWE_buy_ger|0]%"
+  SWE_V_eng: "[?SWE_buy_eng|0]%"
+  SWE_V_sov: "[?SWE_buy_sov|0]%"
+  SWE_RAISE: "Raise"
+  SWE_RAISE_ger_TT: "§YRaise the German quota§!\\n£white_dot Cost: §Y10§! £pol_power\\n£white_dot §YShare§!: §G+10%§!\\n£white_dot §LAllied pressure§!: §R+5§!\\n£white_dot Right-click to lower it"
+  SWE_RAISE_eng_TT: "§YRaise the British quota§!\\n£white_dot Cost: §Y10§! £pol_power\\n£white_dot §YShare§!: §G+10%§!\\n£white_dot §LAxis pressure§!: §R+5§!\\n£white_dot Right-click to lower it"
+  SWE_RAISE_sov_TT: "§YRaise the Soviet quota§!\\n£white_dot Cost: §Y10§! £pol_power\\n£white_dot §YShare§!: §G+10%§!\\n£white_dot Right-click to lower it"
+  SWE_SHIPS_L: "Ore ships at sea"
+  SWE_SHIPS_V: "§Y[?SWE_ships|0]§! / 8"
+  SWE_SHIPS_TT: "§YOre convoys§! under way from §CLuleå§! and §CNarvik§!"
+  SWE_DIAL_V: "[?SWE_neutrality|0]"
+  SWE_DIAL_TT: "§LNeutrality§!: §Y[?SWE_neutrality|0]§! of 100"
+  SWE_AXIS_L: "§LAxis§!"
+  SWE_ALLIED_L: "§LAllies§!"
+  SWE_AXIS_TT: "§LAxis pressure§!: §Y[?SWE_axis_pressure|0]§!\\n£white_dot Above §Y75§!: §RBerlin issues demands§!"
+  SWE_ALLIED_TT: "§LAllied pressure§!: §Y[?SWE_allied_pressure|0]§!\\n£white_dot Above §Y75§!: §RLondon threatens a blockade§!"
+  SWE_PRESSURE_NOTE: "Pressure falls by §G2§! a month while both shares stay below §Y40%§!."
+
+scripted_loc:
+  - name: GetSWEOreMood
+    cases:
+      - {trigger: "check_variable = { SWE_buy_ger > 59.99 }", key: SWE_MOOD_GER, text: "§RLondon calls Sweden Germany's quartermaster§!"}
+      - {trigger: "check_variable = { SWE_buy_eng > 59.99 }", key: SWE_MOOD_ENG, text: "§RBerlin suspects Stockholm has chosen a side§!"}
+      - {key: SWE_MOOD_OK, text: "§GBoth camps grumble, neither acts§!"}
+  - name: GetSWENeutrality
+    cases:
+      - {trigger: "check_variable = { SWE_neutrality < 30 }", key: SWE_NEU_0, text: "§RSweden's neutrality is a fiction both sides see through§!"}
+      - {trigger: "check_variable = { SWE_neutrality < 60 }", key: SWE_NEU_1, text: "§YStrained: every concession is noted abroad§!"}
+      - {key: SWE_NEU_2, text: "§GRespected: the Riksdag's line holds§!"}

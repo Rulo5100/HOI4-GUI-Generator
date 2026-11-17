@@ -1,0 +1,67 @@
+# Mock game state for `guigen preview specs/MAN/spec.py --mock specs/MAN/mock.yaml`
+# Year 2 of the First Five-Year Plan, two provinces zoned, Ministry of Industry still vacant.
+default_var: 0
+vars:
+  MAN_plan_stage: 1
+  MAN_plan_year: 2
+  MAN_pct_steel: 62
+  MAN_pct_coal: 48
+  MAN_pct_power: 25
+  MAN_pct_mach: 12
+  MAN_plan_pct: 37
+  MAN_q_steel: 310
+  MAN_qt_steel: 500
+  MAN_q_coal: 240
+  MAN_qt_coal: 500
+  MAN_q_power: 75
+  MAN_qt_power: 300
+  MAN_q_mach: 36
+  MAN_qt_mach: 300
+  MAN_labour: 42
+  MAN_labour_income: 1.5
+  MAN_zones_used: 2
+  MAN_zone_cap: 4
+  MAN_proj_active: 1
+  MAN_proj_slots: 3
+  MAN_quota_mult: 1.05
+  MAN_review_need: 40
+  MAN_kw_pat: 55
+  MAN_h_kw: 1
+  MAN_h_gab: 1
+  MAN_h_ind: 0
+  MAN_h_mgy: 1
+  MAN_h_smr: 1
+  MAN_fav_kw: 62
+  MAN_fav_gab: 45
+  MAN_fav_ind: 50
+  MAN_fav_mgy: 71
+  MAN_fav_smr: 28
+  MAN_bandit_avg: 38
+  MAN_band1: 64
+  MAN_band2: 35
+  MAN_band3: 81
+  MAN_bl_716: 12
+  MAN_bl_715: 58
+  MAN_bl_328: 47
+  MAN_bl_717: 66
+  MAN_bl_714: 33
+  MAN_bl_761: 9
+  MAN_bl_610: 41
+  MAN_bl_611: 22
+  MAN_bl_612: 18
+  MAN_bl_1043: 27
+  MAN_bandit: 40
+  MAN_gar_n: 1
+  MAN_gar_cap: 3
+  political_power: 85
+  command_power: 22
+  manpower: 160000
+  manpower_k: 160
+flags: [MAN_zone_unl_hi, MAN_zone_unl_min, MAN_zone_unl_pow, MAN_zone_unl_set, MAN_review_running, MAN_req_kw_a]
+state_flags:
+  716: [MAN_surveyed, MAN_zoned, MAN_zone_hi]
+  328: [MAN_surveyed]
+  717: [MAN_svy_on]
+  715: [MAN_surveyed, MAN_zoned, MAN_zone_min, MAN_sw_on]
+  714: [MAN_garrisoned]
+focuses: []
