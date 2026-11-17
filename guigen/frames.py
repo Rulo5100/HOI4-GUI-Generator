@@ -4,8 +4,8 @@ A scripted GUI property `elem = { frame = VAR }` needs VAR to hold 1..noOfFrames
 the scripted effect lines that compute VAR from a game value; `FrameSet.effect(name)` wraps them all
 in one scripted effect (call it from your weekly / on-click refresh).
 
-    Linear("MAN_f_steel", "MAN_pct_steel")              # 0..100 -> frames 1..11
-    Linear("MAN_f_pat21", "MAN_kw_pat", frames=21)      # 0..100 -> 1..21
+    Linear("XYZ_f_steel", "XYZ_pct_steel")              # 0..100 -> frames 1..11
+    Linear("XYZ_f_mood", "XYZ_mood", frames=21)         # 0..100 -> 1..21
     Linear("X_f_lvl", "X_level", lo=-50, hi=50)         # shifts before dividing
     Thresholds("X_f_tier", "X_bandits", [25, 45, 65])   # frame 1, 2 above 25, 3 above 45 ...
     Flags("X_f_zone", "716", ["X_svy_on", "X_surveyed"])  # later flags win

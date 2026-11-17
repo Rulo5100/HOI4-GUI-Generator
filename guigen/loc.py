@@ -53,7 +53,7 @@ def bullets(title, *lines):
 
 
 class Loc:
-    """Ordered loc entries. Duplicates keep the first text (like the MAN build); a conflicting
+    """Ordered loc entries. Duplicates keep the first text ; a conflicting
     duplicate is recorded in `conflicts` for the validator."""
 
     def __init__(self):

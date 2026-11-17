@@ -1,7 +1,7 @@
 """GUI element model and .gui emission.
 
-Each element knows how to print itself as Paradox script. The key order and whitespace match the
-original Manchukuo generator, so ported boards come out byte-identical.
+Each element knows how to print itself as Paradox script. The key order and whitespace are fixed
+(tabs, one attribute per line), so a rebuild is byte-identical and diffs stay readable.
 
 Sizes (`w`, `h`) are kept on every element, even where the .gui file does not need them (icons,
 buttons), so the layout helpers, the validator and the preview renderer can reason about extents.

@@ -1,7 +1,7 @@
 """Colour themes for generated sprites and the preview.
 
-`Theme.get(name)` returns a copy you can tweak. The default "manchukuo" theme holds the exact colours of
-the original MAN boards: change a colour there and the MAN port stops being pixel-identical.
+`Theme.get(name)` returns a copy you can tweak. The default "parchment" theme (dark parchment, brass
+outlines) is pinned by a regression test: change its colours and that test will fail.
 
 A country theme usually only needs `accent`, `bars` and perhaps the panel tints, e.g.
 
@@ -16,7 +16,7 @@ def lerp(a, b, t):
 
 @dataclass
 class Theme:
-    name: str = "manchukuo"
+    name: str = "parchment"
     # frame bars
     bar_bg: tuple = (28, 26, 22, 235)
     bar_outline: tuple = (120, 110, 90, 255)
@@ -62,6 +62,8 @@ class Theme:
                 return tuple(self.bars[c])
             if c in ("accent", "good", "bad", "mid"):
                 return tuple(getattr(self, c))
+            if isinstance(getattr(self, c, None), tuple):          # any theme colour: outline, panel_bg, shadow ...
+                return tuple(getattr(self, c)[:3])
             if c.startswith("#") and len(c) == 7:
                 return tuple(int(c[i:i + 2], 16) for i in (1, 3, 5))
             raise KeyError(f"unknown colour {c!r} in theme {self.name}")
@@ -73,7 +75,7 @@ class Theme:
         return replace(self, **kw)
 
     @classmethod
-    def get(cls, name="manchukuo"):
+    def get(cls, name="parchment"):
         if isinstance(name, Theme):
             return name
         if name not in THEMES:
@@ -82,8 +84,8 @@ class Theme:
 
 
 THEMES = {
-    # the original Manchukuo palette: dark parchment, brass outlines
-    "manchukuo": Theme(),
+    # dark parchment, brass outlines (the default)
+    "parchment": Theme(),
     # cool grey-blue, e.g. Germany, Sweden
     "steel": Theme(name="steel", bar_bg=(22, 25, 30, 235), bar_outline=(105, 115, 130, 255), panel_bg=(24, 27, 32, 235),
                    gauge_bg=(20, 23, 28, 240), outline=(120, 130, 145, 255), card_top=(40, 44, 52), card_bottom=(22, 25, 30),

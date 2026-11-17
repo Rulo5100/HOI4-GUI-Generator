@@ -1,0 +1,125 @@
+# An interactive window for SIT: a button in the top bar opens it; it is moveable and has tabs.
+# It shows every chart type guigen has, so delete what you do not need.
+#   guigen preview examples/situation_room/SIT_window.yaml --mod <mod> --mock examples/situation_room/SIT_window_mock.yaml --set SIT_tab=1
+# In your mod: call SIT_guigen_refresh = yes after the data changes, SIT_trend_record = yes monthly.
+project:
+  prefix: SIT
+  theme: steel
+
+boards:
+  - name: SIT_window
+    window:
+      title: SIT_TITLE
+      w: 720
+      h: 560
+      opener: top_bar
+      opener_xy: [620, 6]
+      opener_tooltip: SIT_OPEN_TT
+    elements:
+      - tabs:
+          var: SIT_tab
+          height: 470
+          refresh: SIT_guigen_refresh = yes
+          tabs:
+            - key: trends
+              label: SIT_TAB_TRENDS
+              elements:
+                - text: {name: SIT_trend_h, text: SIT_TREND_H, w: 460, h: 22, font: hoi_18mbs}
+                - chart:
+                    type: area
+                    name: SIT_trend
+                    w: 460
+                    h: 160
+                    points: 24
+                    series:
+                      - {array: SIT_output_hist, source: SIT_output, label: Output, colour: good}
+                      - {array: SIT_costs_hist, source: SIT_costs, label: Costs, colour: bad}
+                - legend: {name: SIT_trend_key, x: 490, y: 34, w: 200, items: [[Output, good], [Costs, bad]]}
+                - chart: {type: ring, name: SIT_morale, x: 520, y: 100, size: 84, var: SIT_morale, label: Morale}
+                - chart: {type: scale, name: SIT_lean, w: 460, var: SIT_lean, left: Hawks, right: Doves, stops: [red, mid, blue]}
+                - chart:
+                    type: hbar
+                    name: SIT_stocks
+                    w: 680
+                    h: 90
+                    max: 100
+                    bars:
+                      - {var: SIT_food, label: Food, colour: green}
+                      - {var: SIT_fuel, label: Fuel, colour: gold}
+                      - {var: SIT_arms, label: Arms, colour: red}
+            - key: shares
+              label: SIT_TAB_SHARES
+              elements:
+                - row:
+                    items:
+                      - chart:
+                          type: pie
+                          name: SIT_income
+                          size: 150
+                          legend_w: 150
+                          slices:
+                            - {var: SIT_inc_tax, label: Taxes, colour: blue}
+                            - {var: SIT_inc_trade, label: Trade, colour: gold}
+                            - {var: SIT_inc_aid, label: Aid, colour: green}
+                      - chart:
+                          type: donut
+                          name: SIT_spend
+                          x: 360
+                          size: 150
+                          legend_w: 150
+                          slices:
+                            - {var: SIT_sp_army, label: Army, colour: red}
+                            - {var: SIT_sp_people, label: People, colour: green}
+                            - {var: SIT_sp_other, label: Other, colour: outline}
+                - space: 20
+                - chart:
+                    type: stacked
+                    name: SIT_seats
+                    w: 680
+                    h: 22
+                    parts:
+                      - {var: SIT_seats_a, label: Government, colour: gold}
+                      - {var: SIT_seats_b, label: Opposition, colour: blue}
+                      - {var: SIT_seats_c, label: Independents, colour: outline}
+            - key: compare
+              label: SIT_TAB_COMPARE
+              elements:
+                - chart:
+                    type: bar
+                    name: SIT_cmp
+                    w: 400
+                    h: 150
+                    bars:
+                      - {var: SIT_cmp_a, label: North, colour: blue}
+                      - {var: SIT_cmp_b, label: South, colour: gold}
+                      - {var: SIT_cmp_c, label: East, colour: green}
+                      - {var: SIT_cmp_d, label: West, colour: red}
+                - chart:
+                    type: heatmap
+                    name: SIT_grid
+                    rows: [[n, North], [s, South]]
+                    cols: [[a, Farms], [b, Mines], [c, Mills]]
+                    var: "SIT_grid_{row}_{col}"
+                    cell: [70, 24]
+            - key: controls
+              label: SIT_TAB_CONTROLS
+              elements:
+                - chart:
+                    type: scatter
+                    name: SIT_map
+                    w: 240
+                    h: 240
+                    points:
+                      - {x: SIT_us_x, y: SIT_us_y, label: Us, colour: gold, shape: diamond}
+                      - {x: SIT_them_x, y: SIT_them_y, label: Them, colour: red}
+                - stepper: {name: SIT_budget, x: 300, y: 0, var: SIT_budget, step: 5, lo: 0, hi: 100, label: "Budget %", label_w: 120}
+                - switch: {name: SIT_mobilise, x: 300, y: 36, var: SIT_mobilised, label: Mobilise}
+
+loc:
+  SIT_TITLE: "The Situation Room"
+  SIT_OPEN_TT: "§YThe Situation Room§!\\n£white_dot Open or close the window"
+  SIT_TAB_TRENDS: "Trends"
+  SIT_TAB_SHARES: "Shares"
+  SIT_TAB_COMPARE: "Compare"
+  SIT_TAB_CONTROLS: "Controls"
+  SIT_TREND_H: "§YOutput and costs§!, last 24 months"

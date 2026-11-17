@@ -1,5 +1,5 @@
 """Reusable composite widgets. Each takes a Board, adds elements + wiring, and returns the new y (or a
-height). They are the building blocks of the MAN port, so their output order is fixed: changing it
+height). Their output order is fixed (a regression test pins it): changing it
 changes the generated files.
 """
 from .layout import Columns
@@ -32,7 +32,7 @@ def stat_row(board, y, label, bar, value=None, pct=None, cols=None, bar_dy=3):
     """Label | frame bar | value | percent on one row.
 
     label: (name, loc key, font, tooltip) / bar: (name, sprite, frame var) / value, pct: (name, loc key) or None.
-    cols: layout.Columns with 4 columns (defaults to the MAN quota table).
+    cols: layout.Columns with 4 columns (default: label 145, bar 150, value 110, percent 52).
     """
     cols = cols or Columns.at([10, 160, 322, 438], [145, 150, 110, 52])
     ln, lk, lf, ltt = label

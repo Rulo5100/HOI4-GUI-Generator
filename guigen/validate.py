@@ -76,7 +76,7 @@ def _known_sloc(p, fs):
 
 
 def _known_effects(p, fs):
-    names = {p.frame_effect} if p.frames.rules and p.files.get("frames") else set()
+    names = set(p.effect_names()) if p.files.get("frames") else set()
     pats = [os.path.join(fs.root, "common", "scripted_effects", "*.txt")]
     if fs.vanilla:
         pats.append(os.path.join(fs.vanilla, "common", "scripted_effects", "*.txt"))
@@ -105,7 +105,7 @@ def validate(p, fs, width=520):
     locs = _known_loc(p, fs)
     slocs = _known_sloc(p, fs)
     effects = _known_effects(p, fs)
-    frame_rules = p.frames.by_var()
+    frame_rules = p.frame_vars()          # var -> frames reached (frame rules and charts)
     mod_script = None
 
     def ref_check(where, text):
@@ -176,11 +176,14 @@ def validate(p, fs, width=520):
             spr = getattr(names[el], "sprite", None)
             nf = gidx.frames(spr) if spr else None
             rule = frame_rules.get(var)
-            if rule is not None and rule.frames and nf:
-                if rule.frames > nf:
-                    errors.append(f"{b.name}/{el}: {var} reaches frame {rule.frames} but {spr} has {nf} frames")
-                elif rule.frames < nf:
-                    warnings.append(f"{b.name}/{el}: {spr} has {nf} frames but {var} only reaches {rule.frames}")
+            sp = p.sprites.get(spr) if spr else None
+            if sp is not None and getattr(sp, "progress", False):
+                nf = sp.steps                 # a progressbar's frame is its progress, 0..steps
+            if rule is not None and nf:
+                if rule > nf:
+                    errors.append(f"{b.name}/{el}: {var} reaches frame {rule} but {spr} has {nf} frames")
+                elif rule < nf:
+                    warnings.append(f"{b.name}/{el}: {spr} has {nf} frames but {var} only reaches {rule}")
             elif rule is None:
                 if mod_script is None:
                     mod_script = "".join(t for _, t in _read_all([os.path.join(fs.root, d, "**", "*.txt") for d in ("common", "events", "history")]))
@@ -251,8 +254,13 @@ def validate(p, fs, width=520):
             if t.count("{") != t.count("}"):
                 errors.append(f"{rel}: unbalanced braces")
     for s in p.sprites:
-        if not os.path.exists(fs.out_path(s.texture)) and not fs.find(s.texture):
-            errors.append(f"generated texture {s.texture} missing")
+        texs = [s.texture] if not getattr(s, "progress", False) else ([s.texture, s.texture2] if s.textured else [])
+        for tex in texs:
+            if not os.path.exists(fs.out_path(tex)) and not fs.find(tex):
+                errors.append(f"generated texture {tex} missing")
+        w = s.frame_size[0] * s.frames if not getattr(s, "progress", False) else s.w
+        if w > 8192:
+            warnings.append(f"{s.name}: texture is {w} px wide; keep sprite sheets at 8192 px or less (fewer frames or levels)")
     warnings += text_fit_warnings(p, fs)
     return errors, warnings
 

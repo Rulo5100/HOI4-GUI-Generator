@@ -1,0 +1,61 @@
+# Mock state for the economy window (Overview tab open)
+default_var: 0
+flags: [ECO_econ_open]
+vars:
+  ECO_econ_tab: 0
+  ECO_gdp: 412
+  ECO_debt: 246
+  ECO_growth: 3.4
+  ECO_inflation: 6.2
+  ECO_freedom: 38
+  ECO_unemployment: 8.5
+  ECO_interest: 4.25
+  ECO_rev_income: 58
+  ECO_rev_business: 34
+  ECO_rev_excise: 22
+  ECO_rev_tariffs: 12
+  ECO_rev_other: 9
+  ECO_exp_military: 61
+  ECO_exp_welfare: 44
+  ECO_exp_infra: 27
+  ECO_exp_interest: 18
+  ECO_debt_central: 70
+  ECO_debt_banks: 112
+  ECO_debt_foreign: 64
+  ECO_out_agr: 48
+  ECO_out_min: 31
+  ECO_out_ind: 112
+  ECO_out_srv: 164
+  ECO_out_mil: 57
+  ECO_dev_north_agr: 35
+  ECO_dev_north_min: 72
+  ECO_dev_north_ind: 81
+  ECO_dev_north_srv: 66
+  ECO_dev_north_mil: 58
+  ECO_dev_south_agr: 84
+  ECO_dev_south_min: 22
+  ECO_dev_south_ind: 31
+  ECO_dev_south_srv: 44
+  ECO_dev_south_mil: 12
+  ECO_dev_east_agr: 61
+  ECO_dev_east_min: 49
+  ECO_dev_east_ind: 55
+  ECO_dev_east_srv: 38
+  ECO_dev_east_mil: 70
+  ECO_dev_west_agr: 28
+  ECO_dev_west_min: 15
+  ECO_dev_west_ind: 74
+  ECO_dev_west_srv: 91
+  ECO_dev_west_mil: 40
+  ECO_party_a_econ: 35
+  ECO_party_a_auth: 55
+  ECO_party_b_econ: -40
+  ECO_party_b_auth: -20
+  ECO_party_c_econ: -75
+  ECO_party_c_auth: 70
+  ECO_tax_rate: 32
+  ECO_price_controls: 1
+  political_power: 120
+arrays:
+  ECO_gdp_hist:  [352, 355, 361, 358, 366, 371, 369, 377, 382, 380, 386, 390, 388, 393, 397, 395, 399, 404, 401, 406, 409, 407, 410, 412]
+  ECO_debt_hist: [181, 184, 186, 190, 193, 195, 199, 202, 205, 209, 212, 214, 218, 221, 223, 226, 229, 231, 234, 237, 239, 241, 244, 246]

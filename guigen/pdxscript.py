@@ -3,7 +3,7 @@ import re
 
 
 def indent(s, n):
-    """Indent every non-empty line by n tabs (the MAN generator's `ind`)."""
+    """Indent every non-empty line by n tabs."""
     pad = "\t" * n
     return "".join(pad + l + "\n" if l.strip() else "\n" for l in s.strip("\n").split("\n"))
 

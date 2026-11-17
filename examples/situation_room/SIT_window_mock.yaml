@@ -1,0 +1,38 @@
+flags: [SIT_window_open]
+default_var: 0
+vars:
+  SIT_tab: 0
+  SIT_morale: 64
+  SIT_lean: 35
+  SIT_food: 72
+  SIT_fuel: 35
+  SIT_arms: 58
+  SIT_inc_tax: 50
+  SIT_inc_trade: 30
+  SIT_inc_aid: 12
+  SIT_sp_army: 40
+  SIT_sp_people: 35
+  SIT_sp_other: 15
+  SIT_seats_a: 210
+  SIT_seats_b: 160
+  SIT_seats_c: 30
+  SIT_cmp_a: 80
+  SIT_cmp_b: 45
+  SIT_cmp_c: 120
+  SIT_cmp_d: 64
+  SIT_grid_n_a: 20
+  SIT_grid_n_b: 75
+  SIT_grid_n_c: 50
+  SIT_grid_s_a: 90
+  SIT_grid_s_b: 10
+  SIT_grid_s_c: 35
+  SIT_us_x: 30
+  SIT_us_y: 40
+  SIT_them_x: -50
+  SIT_them_y: 60
+  SIT_budget: 45
+  SIT_mobilised: 0
+  political_power: 100
+arrays:
+  SIT_output_hist: [50, 52, 51, 55, 57, 56, 60, 62, 61, 64, 66, 65, 68, 70, 69, 71, 74, 73, 76, 78, 77, 80, 81, 83]
+  SIT_costs_hist: [40, 41, 43, 42, 44, 46, 45, 47, 49, 48, 50, 51, 53, 52, 54, 55, 57, 56, 58, 60, 59, 61, 62, 64]

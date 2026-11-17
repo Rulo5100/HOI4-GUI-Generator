@@ -27,7 +27,7 @@ from .theme import Theme
 
 
 class Project:
-    def __init__(self, fs, prefix, theme="manchukuo", files=None, loc_mode="own", language="english",
+    def __init__(self, fs, prefix, theme="parchment", files=None, loc_mode="own", language="english",
                  frame_effect="{P}_guigen_refresh_frames", sloc_header=None, frames_header=None):
         self.fs, self.prefix = fs, prefix
         self.theme = Theme.get(theme)
@@ -52,6 +52,9 @@ class Project:
         self.locs = Loc()
         self.defined_texts = []
         self.frames = FrameSet()
+        self.charts = []              # charts.Chart objects (their update effects go into the frames file)
+        self.extra_effects = []       # (name, body) more scripted effects for the frames file (windows, tabs)
+        self.needs_refresh = False    # set by windows / controls that call the refresh effect
         self.embedded = []            # (file, block name, text): generated blocks that live in files we do not own
         self._gfx_index = None
 
@@ -134,8 +137,50 @@ class Project:
     def scripted_loc_text(self):
         return self.sloc_header + "".join(dt.emit() for dt in self.defined_texts)
 
+    @property
+    def refresh_effect(self):
+        """One effect that refreshes every frame rule and chart: call it after your data changes."""
+        return f"{self.prefix}_guigen_refresh"
+
+    def chart_effects(self):
+        out = []
+        for ch in self.charts:
+            out += ch.effects()
+        return out + list(self.extra_effects)
+
+    def effect_names(self):
+        names = {name for name, _ in self.chart_effects()}
+        if self.frames.rules:
+            names.add(self.frame_effect)
+        if self.charts or self.needs_refresh:
+            names.add(self.refresh_effect)
+        return names
+
+    def frame_vars(self):
+        """var -> number of frames it can reach, from frame rules and charts (for the validator)."""
+        out = {v: r.frames for v, r in self.frames.by_var().items() if r.frames}
+        for ch in self.charts:
+            out.update(ch.frame_vars())
+        return out
+
     def frames_text(self):
-        return self.frames_header + self.frames.effect(self.frame_effect)
+        from .pdxscript import indent
+        s = self.frames_header
+        if self.frames.rules:
+            s += self.frames.effect(self.frame_effect)
+        for name, body in self.chart_effects():
+            s += f"\n{name} = {{\n" + indent(body, 1) + "}\n"
+        if self.charts or self.needs_refresh:
+            calls = ([f"{self.frame_effect} = yes"] if self.frames.rules else []) + [f"{ch.update} = yes" for ch in self.charts if ch.effects()]
+            s += f"\n{self.refresh_effect} = {{\n" + "".join(f"\t{c}\n" for c in calls or ["# nothing to refresh yet"]) + "}\n"
+        return s
+
+    def shader_files(self):
+        """[(path, text)] shader files the project needs (shader-mode line charts)."""
+        from .shaders import LINE_SHADER, LINE_SHADER_PATH
+        if any(getattr(s, "effect", None) == "line" for s in self.sprites):
+            return [(LINE_SHADER_PATH, LINE_SHADER)]
+        return []
 
     def outputs(self):
         """[(mod-relative path, kind, payload, bom)] kind: text | image | loc."""
@@ -148,11 +193,18 @@ class Project:
             out.append((f["scripted_gui"], "text", self.scripted_gui_text(), False))
         if self.defined_texts:
             out.append((f["scripted_loc"], "text", self.scripted_loc_text(), False))
-        if self.frames.rules and f.get("frames"):
+        if (self.frames.rules or self.chart_effects() or self.needs_refresh) and f.get("frames"):
             out.append((f["frames"], "text", self.frames_text(), False))
+        for path, text in self.shader_files():
+            out.append((path, "text", text, False))
         if self.locs.entries and self.loc_mode != "none":
             out.append((f["loc"], "loc", None, True))
         for s in self.sprites:
+            if getattr(s, "progress", False):
+                if s.textured:
+                    out.append((s.texture, "image", s, False))
+                    out.append((s.texture2, "image2", s, False))
+                continue
             out.append((s.texture, "image", s, False))
         return out
 
@@ -166,6 +218,8 @@ class Project:
         for rel, kind, payload, bom in self.outputs():
             if kind == "image":
                 self.fs.write_image(rel, payload.image(self.theme))
+            elif kind == "image2":
+                self.fs.write_image(rel, payload.render_empty(self.theme))
             elif kind == "loc":
                 self.fs.write_text(rel, self.loc_text(), bom=True, check_braces=False)
             else:

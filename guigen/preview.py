@@ -4,7 +4,7 @@ What it draws:
 * every element in .gui order, at its real position, with its real sprite (generated sprites from the
   build, existing ones from the mod / vanilla .gfx, DDS included) and frame;
 * frames from the scripted GUI properties, computed from mock variables through the project's frame
-  rules (Linear / Thresholds / Flags), so a mock `MAN_pct_steel: 45` lights the bar the way the game will;
+  rules (Linear / Thresholds / Flags), so a mock `XYZ_pct_steel: 45` lights the bar the way the game will;
 * `_visible` triggers (hidden elements are skipped) and `_click_enabled` (disabled buttons are dimmed);
 * text with loc resolved: keys, [Scope.GetX] scripted loc (first true case, or a forced pick),
   [?var|fmt] values, £texticons (real vanilla icons when found), §colour codes with the game's own
@@ -143,6 +143,31 @@ class Renderer:
         self.notes = []
         self.clipped = []
         self._sprite_cache = {}
+        self.refresh_charts()
+
+    def refresh_charts(self):
+        """Charts compute their frame / label variables from the mock (call again after the mock changes)."""
+        for ch in getattr(self.p, "charts", []):
+            self.mock.vars.update(ch.mock_vars(self.mock))
+
+    def click(self, board, x, y):
+        """Simulate a left click at (x, y) on the last render of `board`: run the button's effect on the mock
+        if its click_enabled trigger allows it. Returns a short description, or None if nothing was hit."""
+        trig, eff = dict(board.triggers), dict(board.effects)
+        for el, bb in reversed(getattr(self, "last_boxes", [])):
+            if bb[0] <= x < bb[2] and bb[1] <= y < bb[3]:
+                if not isinstance(el, Button):
+                    tt = self.resolve(el.tooltip) if el.tooltip else ""
+                    return f"{el.name} ({el.kind})" + (f": {tt[:160]}" if tt else "")
+                body = eff.get(f"{el.name}_click")
+                if body is None:
+                    return f"{el.name}: button without a click effect"
+                if not self.mock.test(trig.get(f"{el.name}_click_enabled")):
+                    return f"{el.name}: disabled ({trig.get(f'{el.name}_click_enabled')})"
+                self.mock.run(body, skip={self.p.refresh_effect, self.p.frame_effect} | {ch.update for ch in self.p.charts})
+                self.refresh_charts()
+                return f"{el.name}: clicked"
+        return None
 
     # ------------------------------------------------------------------ data
     def _load_loc(self):
@@ -173,7 +198,49 @@ class Renderer:
         self._sprite_cache[name] = out
         return out
 
+    def progress_frame(self, s, frame):
+        """Emulate a progressbartype (shader mode) for the given frame value."""
+        from PIL import ImageDraw as D
+        w, h = s.w, s.h
+        frac = max(0.0, min(1.0, (frame or 0) / s.steps))
+        out = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        if s.effect == "line":
+            v = int(frame or 0)
+            a, b = v // 1000, v % 1000
+            rgba = tuple(int(c * 255) for c in s.colortwo)
+            lw = max(1, round(s.color[2] * 10))
+            big = Image.new("RGBA", (w * 4, h * 4), (0, 0, 0, 0))
+            d = D.Draw(big)
+            y0, y1 = (h - a) * 4, (h - b) * 4
+            if s.color[3]:
+                d.polygon([(0, y0), (w * 4, y1), (w * 4, h * 4), (0, h * 4)], fill=rgba[:3] + (int(255 * s.color[3]),))
+            slope = (y1 - y0) / (w * 4)
+            d.line([(-4, y0 - 4 * slope), (w * 4 + 4, y1 + 4 * slope)], fill=rgba, width=lw * 4)
+            return big.resize((w, h), Image.LANCZOS)
+        fill = s.image(self.p.theme).convert("RGBA").resize((w, h))
+        empty = s.render_empty(self.p.theme).convert("RGBA").resize((w, h))
+        mask = Image.new("L", (w, h), 0)
+        md = D.Draw(mask)
+        if s.effect == "radial":
+            if frac >= 1:
+                md.rectangle([0, 0, w, h], fill=255)
+            elif frac > 0:
+                md.pieslice([-w, -h, 2 * w, 2 * h], -90, -90 + 360 * frac, fill=255)
+        elif s.horizontal:
+            md.rectangle([0, 0, int(w * frac) - 1, h], fill=255)
+        else:
+            md.rectangle([0, h - int(h * frac), w, h], fill=255)
+        out.alpha_composite(empty)
+        out.paste(fill, (0, 0), Image.composite(fill.getchannel("A"), Image.new("L", (w, h), 0), mask))
+        return out
+
     def sprite_frame(self, name, frame, scale=None):
+        s = self.p.sprites.get(name)
+        if s is not None and getattr(s, "progress", False):
+            cell = self.progress_frame(s, frame)
+            if scale and scale != 1:
+                cell = cell.resize((max(1, int(cell.width * scale)), max(1, int(cell.height * scale))), Image.LANCZOS)
+            return cell
         strip, n = self.sprite_strip(name)
         if strip is None:
             return None
@@ -337,11 +404,48 @@ class Renderer:
                     return int(self.mock.vars[var])
         return el.frame if isinstance(el, Icon) else 1
 
-    def render_board(self, b):
+    def nine_slice(self, sprite_name, w, h):
+        """A corneredTileSpriteType stretched to w x h (corners kept, edges and centre stretched)."""
+        s = self.p.sprites.get(sprite_name)
+        src = s.image(self.p.theme) if s is not None else self.gidx.open(sprite_name)
+        if src is None:
+            return None
+        b = getattr(s, "border", None) or min(src.width, src.height) // 4
+        b = min(b, w // 2, h // 2)
+        sw, sh = src.size
+        out = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        xs = [(0, b, 0, b), (b, sw - b, b, w - b), (sw - b, sw, w - b, w)]
+        ys = [(0, b, 0, b), (b, sh - b, b, h - b), (sh - b, sh, h - b, h)]
+        for sx0, sx1, dx0, dx1 in xs:
+            for sy0, sy1, dy0, dy1 in ys:
+                if dx1 > dx0 and dy1 > dy0 and sx1 > sx0 and sy1 > sy0:
+                    out.paste(src.crop((sx0, sy0, sx1, sy1)).resize((dx1 - dx0, dy1 - dy0)), (dx0, dy0))
+        return out
+
+    def render_board(self, b, respect_visible=False):
+        """Draw a board. respect_visible: when the board's own `visible` trigger is false under the mock,
+        draw a placeholder instead (used by guigen app, where a click can close a window)."""
         trig = dict(b.triggers)
         W = b.window.w if isinstance(b.window.w, int) else self.width
         H = max(40, b.window.h or b.auto_height())
-        img = Image.new("RGBA", (W, H), self.p.theme.preview_bg)
+        self.last_boxes = []
+        if respect_visible and b.visible_trigger and not self.mock.test(b.visible_trigger):
+            img = Image.new("RGBA", (min(W, 420), 60), self.p.theme.preview_bg)
+            ImageDraw.Draw(img).text((10, 10), f"{b.name} is hidden:\n{b.visible_trigger}", fill=self.p.theme.preview_text,
+                                     font=TTFont(12).f)
+            return img
+        bg = dict(b.window.extra).get("background")
+        img = Image.new("RGBA", (W, H), (0, 0, 0, 0) if bg else self.p.theme.preview_bg)
+        if bg:
+            import re as _re
+            m = _re.search(r'quadTextureSprite\s*=\s*"?([\w.\-]+)', bg)
+            panel = self.nine_slice(m.group(1), W, H) if m else None
+            if panel is not None:
+                img.alpha_composite(panel)
+        pos = {}
+        for name, kv in b.props:
+            if "x" in kv or "y" in kv:
+                pos[name] = kv
         dbg = []
 
         def visible(name):
@@ -352,6 +456,12 @@ class Renderer:
                 if not visible(el.name):
                     continue
                 x, y = ox + el.x, oy + el.y
+                if el.name in pos:
+                    kv = pos[el.name]
+                    if "x" in kv:
+                        x = ox + int(self.mock.var(kv["x"]))
+                    if "y" in kv:
+                        y = oy + int(self.mock.var(kv["y"]))
                 if isinstance(el, Window):
                     rec(el, x, y)
                     continue
@@ -373,6 +483,7 @@ class Renderer:
                         self.clipped.append(f"{b.name}/{el.name}: text does not fit {el.w}x{el.h} ({self.resolve(el.text)[:60]!r})")
                     dbg.append((el, (x, y, x + el.w, y + el.h)))
         rec(b.window, 0, 0)
+        self.last_boxes = dbg
         if self.debug:
             d = ImageDraw.Draw(img)
             small = TTFont(9).f
@@ -410,8 +521,26 @@ class Renderer:
         return out
 
 
-def preview_project(p, fs, out_dir, mock=None, debug=False, width=520, boards=None):
+def apply_overrides(m, overrides):
+    """--set VAR=VALUE, VAR=[1,2,3] (array), flag:NAME, -flag:NAME."""
+    for o in overrides or []:
+        if o.startswith("flag:"):
+            m.flags.add(o[5:])
+            continue
+        if o.startswith("-flag:"):
+            m.flags.discard(o[6:])
+            continue
+        k, _, v = o.partition("=")
+        v = v.strip()
+        if v.startswith("["):
+            m.arrays[k.strip()] = [float(x) for x in v.strip("[]").split(",") if x.strip()]
+        else:
+            m.vars[k.strip()] = float(v)
+
+
+def preview_project(p, fs, out_dir, mock=None, debug=False, width=520, boards=None, overrides=None, suffix=""):
     m = mock if isinstance(mock, Mock) else Mock.load(mock)
+    apply_overrides(m, overrides)
     r = Renderer(p, fs, m, debug, width)
     os.makedirs(out_dir, exist_ok=True)
     files, imgs = [], []
@@ -419,13 +548,13 @@ def preview_project(p, fs, out_dir, mock=None, debug=False, width=520, boards=No
         if boards and b.name not in boards:
             continue
         img = r.render_board(b)
-        path = os.path.join(out_dir, f"{b.name}.png")
+        path = os.path.join(out_dir, f"{b.name}{suffix}.png")
         img.save(path)
         files.append(path)
         imgs.append(img)
         tt = r.render_tooltips(b)
         if tt is not None:
-            path = os.path.join(out_dir, f"{b.name}_tooltips.png")
+            path = os.path.join(out_dir, f"{b.name}{suffix}_tooltips.png")
             tt.save(path)
             files.append(path)
     if len(imgs) > 1:
@@ -434,7 +563,7 @@ def preview_project(p, fs, out_dir, mock=None, debug=False, width=520, boards=No
         for i in imgs:
             sheet.alpha_composite(i, (x, 12))
             x += i.width + 12
-        path = os.path.join(out_dir, "all_boards.png")
+        path = os.path.join(out_dir, f"all_boards{suffix}.png")
         sheet.save(path)
         files.append(path)
     notes = sorted(set(r.notes)) + [f"clipped: {c}" for c in r.clipped]

@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hoi4-guigen"
+version = "0.2.0"
+description = "Generate Hearts of Iron IV scripted GUIs (boards, interactive windows, charts) from short Python or YAML specs"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["Pillow>=10.1", "numpy>=1.24", "PyYAML>=6.0"]
+
+[project.scripts]
+guigen = "guigen.cli:main"
+
+[project.gui-scripts]
+guigen-app = "guigen.app:main"
+
+[tool.setuptools]
+packages = ["guigen"]

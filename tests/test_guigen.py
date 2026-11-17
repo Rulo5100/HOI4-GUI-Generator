@@ -62,10 +62,10 @@ class Base(unittest.TestCase):
 
 class TestFrames(unittest.TestCase):
     def test_linear_text_matches_man(self):
-        t = Linear("MAN_f_steel", "MAN_pct_steel").text()
-        self.assertEqual(t, "set_variable = { MAN_f_steel = MAN_pct_steel }\ndivide_variable = { MAN_f_steel = 10 }\n"
-                            "round_variable = MAN_f_steel\nadd_to_variable = { MAN_f_steel = 1 }\n"
-                            "clamp_variable = { var = MAN_f_steel min = 1 max = 11 }\n")
+        t = Linear("XYZ_f_steel", "XYZ_pct_steel").text()
+        self.assertEqual(t, "set_variable = { XYZ_f_steel = XYZ_pct_steel }\ndivide_variable = { XYZ_f_steel = 10 }\n"
+                            "round_variable = XYZ_f_steel\nadd_to_variable = { XYZ_f_steel = 1 }\n"
+                            "clamp_variable = { var = XYZ_f_steel min = 1 max = 11 }\n")
 
     def test_linear_mapping(self):
         r = Linear("v", "s", frames=21)
@@ -103,11 +103,13 @@ class TestEol(Base):
         with open(self.fs.path(rel), "wb") as f:
             f.write(b"a = {\n}\n")
         self.fs.write_text(rel, "b = {\n}\n")
-        self.assertEqual(open(self.fs.out_path(rel), "rb").read(), b"b = {\n}\n")
+        with open(self.fs.out_path(rel), "rb") as f:
+            self.assertEqual(f.read(), b"b = {\n}\n")
 
     def test_new_file_defaults_to_crlf(self):
         self.fs.write_text("interface/new.gui", "b = {\n}\n")
-        self.assertEqual(open(self.fs.out_path("interface/new.gui"), "rb").read(), b"b = {\r\n}\r\n")
+        with open(self.fs.out_path("interface/new.gui"), "rb") as f:
+            self.assertEqual(f.read(), b"b = {\r\n}\r\n")
 
     def test_braces_checked(self):
         with self.assertRaises(ValueError):

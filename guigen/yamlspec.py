@@ -49,6 +49,16 @@ Elements are laid out top to bottom. Each one is a one-key mapping:
     repeat: {for: [a, b] or {a: x, b: y}, as: k, elements: [...]}    $k$ (and $k_value$) substituted
     tabs:   {var, tabs: [{key, label, tooltip, elements: [...]}], height, button_w: 110, refresh}
     toggle: {var, sprite, label, height, elements: [...]}
+    chart:  {type: bar|hbar|stacked|pie|donut|line|area|ring|scale|scatter|heatmap, name, x, y, ...}
+            the keyword arguments of the chart classes in charts.py (w, h, size, bars, slices, parts,
+            series, points, var, lo, hi, mode, ...); heatmap var is a pattern with {row} and {col}
+    legend: {name, x, y, items: [[label, colour], ...], w, row}
+    stepper: {name, var, step, lo, hi, label, label_w, cost}
+    switch: {name, var, label, tooltip}
+
+A board with `window: {title, w, h, opener, opener_xy, opener_sprite, opener_text, opener_tooltip, flag,
+moveable, close}` becomes an interactive popup window (see windows.PopupWindow); its elements start
+below the title bar.
 
 `y` on an element moves the cursor there; `h` overrides the measured height.
 """
@@ -81,12 +91,12 @@ def _subst(obj, mapping):
 
 def _theme(spec):
     if isinstance(spec, dict):
-        t = Theme.get(spec.get("base", "manchukuo"))
+        t = Theme.get(spec.get("base", "parchment"))
         kw = {k: (tuple(v) if isinstance(v, list) else v) for k, v in spec.items() if k != "base"}
         if "bars" in kw:
             kw["bars"] = {k: tuple(v) for k, v in kw["bars"].items()}
         return t.derive(**kw)
-    return Theme.get(spec or "manchukuo")
+    return Theme.get(spec or "parchment")
 
 
 class _Layout:
@@ -128,6 +138,17 @@ class _Layout:
             y = W.header(self.b, a.get("name", f"{self.p.prefix}_hd"), a["emblem"], a.get("help"), a["title"], a.get("subs", []))
             self.y = max(self.y, y + 4)
             return 0
+        if kind in ("chart", "legend", "stepper", "switch"):
+            a = dict(a)
+            if "y" in a and y is None:
+                self.y = a["y"]
+            yy = (a.pop("y", self.y) if y is None else y) + a.pop("dy", 0)
+            xx = a.pop("x", self.x)
+            h = build_control(self.p, self.b, kind, xx, yy, a)
+            self.bottom = max(self.bottom, yy + h)
+            if advance:
+                self.y = yy + h + self.gap
+            return h
         a = dict(a)
         if "y" in a and y is None:
             self.y = a["y"]
@@ -187,6 +208,73 @@ class _Layout:
         self.bottom = max(self.bottom, self.y)
 
 
+def _tuples(v):
+    if isinstance(v, list) and v and all(isinstance(x, (int, float)) for x in v):
+        return tuple(v)
+    if isinstance(v, list):
+        return [_tuples(x) for x in v]
+    if isinstance(v, dict):
+        return {k: _tuples(x) for k, x in v.items()}
+    return v
+
+
+def build_control(p, b, kind, x, y, a):
+    """chart / legend / stepper / switch elements. Returns the height used."""
+    from . import charts as C
+    from .windows import stepper, switch
+    a = _tuples(a)
+    if kind == "legend":
+        return C.legend(b, p, a["name"], x, y, [tuple(i) for i in a["items"]], a.get("row", 20), a.get("w", 160))
+    if kind == "stepper":
+        stepper(b, p, a.pop("name"), x, y, a.pop("var"), **a)
+        return 24
+    if kind == "switch":
+        switch(b, p, a.pop("name"), x, y, a.pop("var"), **a)
+        return 20
+    t = a.pop("type")
+    name = a.pop("name")
+    if t in ("bar", "column", "hbar"):
+        w, h = a.pop("w"), a.pop("h")
+        horizontal = (t == "hbar") or a.pop("horizontal", False)
+        C.BarChart(p, b, name, x, y, w, h, a.pop("bars"), horizontal=horizontal, **a)
+        return h if horizontal else h + (36 if a.get("show_values", True) else 20)
+    if t in ("pie", "donut"):
+        size = a.pop("size")
+        if t == "donut":
+            a.setdefault("inner", 0.55)
+        C.PieChart(p, b, name, x, y, size, a.pop("slices"), **a)
+        return size
+    if t == "stacked":
+        h = a.pop("h")
+        C.StackedBar(p, b, name, x, y, a.pop("w"), h, a.pop("parts"), **a)
+        return h + (22 if a.get("legend", True) else 0)
+    if t in ("line", "area"):
+        h = a.pop("h")
+        if t == "area":
+            a.setdefault("area", True)
+        C.LineChart(p, b, name, x, y, a.pop("w"), h, a.pop("series"), **a)
+        return h
+    if t == "ring":
+        size = a.pop("size")
+        C.RingGauge(p, b, name, x, y, size, a.pop("var"), **a)
+        return size + (20 if a.get("label") else 0)
+    if t == "scale":
+        C.ScaleMarker(p, b, name, x, y, a.pop("w"), a.pop("var"), **a)
+        return a.get("marker", 14) + a.get("h", 10) + (18 if a.get("left") or a.get("right") else 0)
+    if t == "scatter":
+        h = a.pop("h")
+        quads = [tuple(q) for q in a.pop("quadrants", [])] or None
+        C.Scatter(p, b, name, x, y, a.pop("w"), h, a.pop("points"), quadrants=quads, **a)
+        return h
+    if t == "heatmap":
+        pattern = a.pop("var")
+        rows, cols = a.pop("rows"), a.pop("cols")
+        cell = tuple(a.pop("cell", (34, 22)))
+        C.Heatmap(p, b, name, x, y, rows, cols, lambda r, c: pattern.replace("{row}", str(r)).replace("{col}", str(c)), cell=cell, **a)
+        return 20 + len(rows) * cell[1]
+    raise ValueError(f"unknown chart type {t!r} (bar, hbar, stacked, pie, donut, line, area, ring, scale, scatter, heatmap)")
+
+
 def load_yaml(fs, path):
     with open(path, encoding="utf-8") as f:
         raw = yaml.safe_load(f)
@@ -217,7 +305,17 @@ def load_yaml(fs, path):
     for dt in d.get("scripted_loc", []):
         p.defined_text(dt["name"], [(c.get("trigger", ""), c["key"], c.get("text")) for c in dt["cases"]])
     for bd in d.get("boards", []):
-        b = p.board(bd["name"], context=bd.get("context", "decision_category"), window_name=bd.get("window"),
+        popup = bd.get("window")
+        if isinstance(popup, dict):
+            from .windows import PopupWindow
+            wd = _tuples(dict(popup))
+            win = PopupWindow(p, bd["name"], wd.pop("title"), wd.pop("w"), wd.pop("h"), **wd)
+            b = win.board
+            lay = _Layout(p, b, bd.get("x", 16), bd.get("gap", 4))
+            lay.y = win.top + 4
+            lay.run(bd.get("elements", []))
+            continue
+        b = p.board(bd["name"], context=bd.get("context", "decision_category"), window_name=popup,
                     width=bd.get("width", "100%%"), parent_token=bd.get("parent_token"), parent_gui=bd.get("parent_gui"),
                     visible=bd.get("visible"), dirty=bd.get("dirty"), map_mode=bd.get("map_mode"),
                     x=bd.get("window_x", 0), y=bd.get("window_y", 0))

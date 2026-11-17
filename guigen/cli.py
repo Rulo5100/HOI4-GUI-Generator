@@ -49,9 +49,13 @@ def _img_compare(a_path, b_path):
         return None
     # getbbox() on an RGBA image only looks at alpha, so take the bbox of each band separately
     d = ImageChops.difference(a, b)
-    boxes = [bb for bb in (band.getbbox() for band in d.split()) if bb]
+    bands = d.split()
+    boxes = [bb for bb in (band.getbbox() for band in bands) if bb]
     box = (min(x[0] for x in boxes), min(x[1] for x in boxes), max(x[2] for x in boxes), max(x[3] for x in boxes))
-    n = sum(1 for px in d.getdata() if px != (0, 0, 0, 0))
+    m = bands[0]
+    for band in bands[1:]:
+        m = ImageChops.lighter(m, band)          # per pixel: the largest channel difference
+    n = sum(m.histogram()[1:])
     return f"{n} pixels differ in {box}"
 
 
@@ -179,7 +183,8 @@ def cmd_preview(a):
         p = load_spec(a.spec)(fs)
         p.write()
         out = a.out or os.path.join(os.path.dirname(os.path.abspath(a.spec)), "preview")
-        files, notes = preview_project(p, fs, out, mock=a.mock, debug=a.debug, width=a.width, boards=a.board)
+        files, notes = preview_project(p, fs, out, mock=a.mock, debug=a.debug, width=a.width, boards=a.board,
+                                       overrides=a.set, suffix=a.suffix)
         for n in notes:
             print("note:", n)
         for f in files:
@@ -189,13 +194,98 @@ def cmd_preview(a):
         shutil.rmtree(stage, ignore_errors=True)
 
 
+CONFIG = os.path.join(os.path.expanduser("~"), ".guigen.json")
+
+
+def load_config():
+    import json
+    try:
+        with open(CONFIG, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def save_config(**kw):
+    import json
+    cfg = load_config()
+    cfg.update({k: v for k, v in kw.items() if v is not None})
+    try:
+        with open(CONFIG, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, indent=2)
+    except OSError:
+        pass
+
+
+def cmd_new(a):
+    from .templates import render
+    os.makedirs(a.folder, exist_ok=True)
+    spec = os.path.join(a.folder, f"{a.prefix}_{a.template}.yaml")
+    mock = os.path.join(a.folder, f"{a.prefix}_{a.template}_mock.yaml")
+    for path in (spec, mock):
+        if os.path.exists(path) and not a.force:
+            print(f"{path} exists (use --force to overwrite)")
+            return 2
+    s, m = render(a.template, a.prefix, spec.replace("\\", "/"), mock.replace("\\", "/"))
+    for path, text in ((spec, s), (mock, m)):
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(text)
+        print("wrote", path)
+    print(f"next: guigen preview {spec} --mock {mock}" + ("" if _default_mod() else " --mod <mod folder>"))
+    return 0
+
+
+def cmd_doctor(a):
+    from .modfs import find_vanilla
+    ok = True
+    print("python      ", sys.version.split()[0])
+    for mod in ("PIL", "numpy", "yaml", "tkinter"):
+        try:
+            m = __import__(mod)
+            print(f"{mod:12s} ok {getattr(m, '__version__', '')}")
+        except ImportError:
+            print(f"{mod:12s} MISSING" + ("  (pip install pillow numpy pyyaml)" if mod != "tkinter" else "  (needed only by guigen app)"))
+            ok = ok and mod == "tkinter"
+    v = find_vanilla(getattr(a, "vanilla", None))
+    print("HOI4        ", v or "not found (set HOI4_PATH or pass --vanilla)")
+    if v:
+        print("game fonts  ", "ok" if os.path.exists(os.path.join(v, "gfx", "fonts", "hoi_16mbs.fnt")) else "missing")
+    print("default mod ", _default_mod() or "none (pass --mod, set GUIGEN_MOD, or pick one in guigen app)")
+    return 0 if ok else 1
+
+
+def cmd_themes(a):
+    from .theme import THEMES
+    for name, t in THEMES.items():
+        print(f"{name:10s} accent {t.accent}  bars: {', '.join(t.bars)}")
+    return 0
+
+
+def cmd_app(a):
+    from .app import main as app_main
+    return app_main()
+
+
+def _default_mod():
+    return os.environ.get("GUIGEN_MOD") or load_config().get("mod")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="guigen", description="HOI4 scripted GUI generator")
     sub = ap.add_subparsers(dest="cmd", required=True)
+    s = sub.add_parser("new", help="write a starter YAML spec and mock")
+    s.add_argument("prefix", help="prefix for every name, usually the country tag")
+    s.add_argument("--template", default="window", choices=["window", "board"])
+    s.add_argument("--folder", default=".")
+    s.add_argument("--force", action="store_true")
+    sub.add_parser("doctor", help="check Python packages, the HOI4 install and fonts")
+    sub.add_parser("themes", help="list the colour themes")
+    sub.add_parser("app", help="open the desktop app")
     for name in ("build", "diff", "validate", "preview"):
         s = sub.add_parser(name)
         s.add_argument("spec")
-        s.add_argument("--mod", required=True, help="mod root folder")
+        s.add_argument("--mod", default=_default_mod(), required=_default_mod() is None,
+                       help="mod root folder (default: $GUIGEN_MOD or the last one used in guigen app)")
         s.add_argument("--vanilla", help="HOI4 install folder (auto-detected)")
         s.add_argument("--eol", default="auto", choices=["auto", "crlf", "lf"])
         if name == "build":
@@ -209,8 +299,12 @@ def main(argv=None):
             s.add_argument("--debug", action="store_true", help="draw element boxes and names")
             s.add_argument("--width", type=int, default=520, help="width used for 100%% windows")
             s.add_argument("--board", action="append", help="only these boards")
+            s.add_argument("--set", action="append", metavar="VAR=VALUE",
+                           help="override a mock variable, a flag (flag:NAME) or an array (VAR=[1,2,3]); repeatable")
+            s.add_argument("--suffix", default="", help="added to the output file names (e.g. _budget)")
     a = ap.parse_args(argv)
-    return {"build": cmd_build, "diff": cmd_diff, "validate": cmd_validate, "preview": cmd_preview}[a.cmd](a)
+    return {"build": cmd_build, "diff": cmd_diff, "validate": cmd_validate, "preview": cmd_preview, "new": cmd_new,
+            "doctor": cmd_doctor, "themes": cmd_themes, "app": cmd_app}[a.cmd](a)
 
 
 if __name__ == "__main__":

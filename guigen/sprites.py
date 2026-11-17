@@ -4,8 +4,8 @@ Every generated sprite is a horizontal strip of `frames` cells. HOI4 picks a cel
 (1-based) on the iconType or through a scripted GUI property, so a variable mapped to 1..frames
 (see frames.py) animates the sprite.
 
-The drawing code of Bar, Pips, Dial, Gauge, Card, Solid and Swatches is the original MAN code with its
-constants lifted into parameters, so the MAN port is pixel-identical.
+Drawing is deterministic (same parameters and theme -> same pixels), so rebuilds are pixel-identical
+and `guigen diff` stays quiet unless something really changed.
 """
 import math
 import os
@@ -34,7 +34,7 @@ class Sprite:
 
     def image(self, theme=None):
         """Rendered strip; re-rendered whenever a parameter or the theme changes."""
-        t = Theme.get(theme or self.theme or "manchukuo")
+        t = Theme.get(theme or self.theme or "parchment")
         key = self._fingerprint(t)
         if self._img is None or self._img_key != key:
             self._img, self._img_key = self.render(t), key
@@ -293,7 +293,7 @@ class SpriteSet:
 
 
 # ------------------------------------------------------------------ existing sprites (mod + vanilla .gfx)
-_SPRITE_RE = re.compile(r'(?:spriteType|frameAnimatedSpriteType|corneredTileSpriteType|textSpriteType)\s*=\s*\{(.*?)\n\s*\}', re.S | re.I)
+_SPRITE_RE = re.compile(r'(?:spriteType|frameAnimatedSpriteType|corneredTileSpriteType|textSpriteType|progressbartype|maskedShieldType)\s*=\s*\{(.*?)\n\s*\}', re.S | re.I)
 
 
 class GfxIndex:
@@ -318,7 +318,7 @@ class GfxIndex:
             n = re.search(r'\bname\s*=\s*"?([^"\s}]+)"?', body)
             if not n or n.group(1) in self.sprites:
                 continue
-            tf = re.search(r'texture[fF]ile\s*=\s*"([^"]+)"', body)
+            tf = re.search(r'texture[fF]ile1?\s*=\s*"([^"]+)"', body)
             fr = re.search(r'noOfFrames\s*=\s*(\d+)', body)
             self.sprites[n.group(1)] = (tf.group(1) if tf else None, int(fr.group(1)) if fr else 1, src)
             self.order.append(n.group(1))

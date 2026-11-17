@@ -8,7 +8,12 @@ from .modfs import ModFS
 from .project import Project
 from .sprites import Bar, Card, Dial, Gauge, GfxIndex, Pips, Solid, SpriteSet, Static, Swatches, Tabs, fit_into
 from .statemap import StateMap
+from .tabs import TabSet, Toggle
 from .theme import THEMES, Theme
+from .chartsprites import (ChartBackground, CloseButton, FillBar, Gradient, LineSegments, Marker, Panel,
+                           ProgressBarSprite, TextButton, Wedge)
+from .charts import (BarChart, Heatmap, LineChart, PieChart, RingGauge, ScaleMarker, Scatter, StackedBar, legend)
+from .windows import PopupWindow, stepper, switch
 from . import widgets
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

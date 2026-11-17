@@ -30,7 +30,7 @@ CARD_W, CARD_H, GAP = 96, 270, 2
 
 
 def build(fs):
-    p = Project(fs, "MAN", theme="manchukuo", loc_mode="merge", files={
+    p = Project(fs, "MAN", theme="parchment", loc_mode="merge", files={
         "gui": "interface/MAN_systems.gui",
         "gfx": "interface/MAN_systems.gfx",
         "scripted_gui": "common/scripted_guis/MAN_systems_guis.txt",
