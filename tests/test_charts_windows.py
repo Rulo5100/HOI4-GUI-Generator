@@ -70,6 +70,16 @@ class TestCharts(Base):
         self.assertIn("remove_from_array = { array = TST_hist index = 0 }", names["TST_line_record"])
         self.assertIn("check_variable = { TST_hist^num > 2 }", p.scripted_gui_text())
 
+    def test_line_sub_cells_interpolate(self):
+        p, b = self.project()
+        lc = LineChart(p, b, "TST_line", 10, 10, 220, 90, [{"array": "TST_hist"}], points=12, levels=11, sub=2)
+        v = lc.mock_vars(Mock({"arrays": {"TST_hist": [0, 100]}}))
+        # 0 -> 100 over two cells: 0 -> 50 (level 5), 50 -> 100 (level 10)
+        self.assertEqual((v["TST_line_f0_0_0"], v["TST_line_f0_0_1"]),
+                         (LineSegments.frame_of(0, 5, 11), LineSegments.frame_of(5, 10, 11)))
+        self.assertEqual(len([e for e in b.elements() if e.name.startswith("TST_line_s0_")]), 22)
+        self.assertIn("multiply_temp_variable = { gg_a = 0.5 }", lc.update_body())
+
     def test_line_shader_writes_shader_file(self):
         p, b = self.project()
         LineChart(p, b, "TST_line", 10, 10, 220, 90, [{"array": "TST_hist"}], points=12, mode="shader")

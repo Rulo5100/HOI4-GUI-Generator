@@ -43,7 +43,9 @@ class App:
         self.mock = tk.StringVar(value=cfg.get("mock", ""))
         self.board = tk.StringVar(value=cfg.get("board", ""))
         self.sets = tk.StringVar(value="")
-        self.zoom = tk.StringVar(value=cfg.get("zoom", "100%"))
+        scale = display_scale(root)
+        default_zoom = "200%" if scale >= 1.75 else "150%" if scale >= 1.25 else "100%"
+        self.zoom = tk.StringVar(value=cfg.get("zoom", default_zoom))
         self.debug = tk.BooleanVar(value=False)
         self.tooltips = tk.BooleanVar(value=False)
         self.watch = tk.BooleanVar(value=True)
@@ -80,7 +82,7 @@ class App:
         e.pack(side="left")
         e.bind("<Return>", lambda ev: self.render(reset_mock=True))
         ttk.Label(bar, text="Zoom").pack(side="left", padx=(12, 2))
-        z = ttk.Combobox(bar, textvariable=self.zoom, values=["50%", "75%", "100%", "150%", "200%"], width=6, state="readonly")
+        z = ttk.Combobox(bar, textvariable=self.zoom, values=["50%", "75%", "100%", "150%", "200%", "300%"], width=6, state="readonly")
         z.pack(side="left")
         z.bind("<<ComboboxSelected>>", lambda e: self.show())
         for text, var in (("Debug boxes", self.debug), ("Tooltips", self.tooltips), ("Watch file", self.watch)):
@@ -266,7 +268,9 @@ class App:
             return
         from PIL import ImageTk
         z = int(self.zoom.get().rstrip("%")) / 100
-        im = self.img if z == 1 else self.img.resize((max(1, int(self.img.width * z)), max(1, int(self.img.height * z))), Image.LANCZOS)
+        # whole-number zooms keep every pixel sharp (nearest); in-between zooms resample smoothly
+        resample = Image.NEAREST if z >= 1 and float(z).is_integer() else Image.LANCZOS
+        im = self.img if z == 1 else self.img.resize((max(1, int(self.img.width * z)), max(1, int(self.img.height * z))), resample)
         bg = Image.new("RGBA", im.size, (20, 20, 20, 255))
         bg.alpha_composite(im)
         self._tk = ImageTk.PhotoImage(bg)
@@ -389,6 +393,7 @@ def main(argv=None):
         print("tkinter is not available in this Python; install the python.org build or use the command line.")
         return 1
     argv = sys.argv[1:] if argv is None else argv
+    _dpi_aware()
     root = tk.Tk()
     _set_icon(root)
     app = App(root)
@@ -405,6 +410,29 @@ def main(argv=None):
         app.render(reload=True)
     root.mainloop()
     return 0
+
+
+def _dpi_aware():
+    """Tell Windows we draw at the real pixel density. Without it, Windows bitmap-stretches the whole app
+    on scaled displays (125%, 150% ...) and the preview turns blurry."""
+    if sys.platform != "win32":
+        return
+    import ctypes
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)          # per-monitor aware
+    except Exception:
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
+
+def display_scale(root):
+    """The display's scale factor (1.0 at 96 dpi, 1.5 at 144 dpi ...)."""
+    try:
+        return max(1.0, root.winfo_fpixels("1i") / 96.0)
+    except Exception:
+        return 1.0
 
 
 def _set_icon(root):

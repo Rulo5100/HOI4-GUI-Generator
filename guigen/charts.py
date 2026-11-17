@@ -362,20 +362,29 @@ class LineChart(Chart):
     series = [{"array": "XYZ_gdp_hist", "label": "GDP", "colour": "green", "source": "XYZ_gdp"}, ...]
     points: how many values are shown (the newest `points` entries; the record effect keeps the array at this size).
     lo / hi: numbers, variables, or None to scale to the data. Sets <name>_lo, <name>_hi, <name>_mid.
-    Sprite mode: `levels` vertical steps per segment (16 is smooth enough for ~120 px).
-    Shader mode: pixel-exact, anti-aliased lines via gfx/FX/guigen_line.shader (experimental).
+    Sprite mode: each segment is one cell, a frame sheet of `levels` x `levels` start / end heights
+    (cell_width x levels^2 pixels, kept within max_sheet; levels is picked automatically, at most 40).
+    sub=2..4 splits each segment into narrower cells, which allows more levels, but on gentle slopes the
+    cells round to flat-then-step and the line looks like a staircase, so one cell is the default.
+    For smooth lines use shader mode: pixel-exact, anti-aliased lines via gfx/FX/guigen_line.shader
+    (experimental).
     """
 
     def __init__(self, p, b, name, x, y, w, h, series, points=12, lo=None, hi=None, levels=None, width=2.0, area=False,
-                 dots=False, y_div=4, labels=True, value_fmt="1", mode="sprite", max_sheet=8192):
+                 dots=False, y_div=4, labels=True, value_fmt="1", mode="sprite", max_sheet=8192, sub=None):
         super().__init__(p, b, name, x, y, mode)
         self.series = _items(series, ("array", "label", "colour"))
-        self.cw = cw = w // (points - 1)
-        if levels is None:          # as smooth as the sheet width allows (cell width x levels^2 <= max_sheet), 8..40
-            levels = max(8, min(40, int((max_sheet / cw) ** 0.5), h // 3))
+        seg_w = w // (points - 1)
+        fit = lambda cell: int((max_sheet / cell) ** 0.5)          # most levels a cell width allows
+        if mode == "shader" or sub is None:
+            sub = 1
+        if levels is None:
+            levels = max(8, min(40, fit(seg_w // sub), h // 3))
+        self.sub = sub
+        self.cw = cw = seg_w // sub                              # one cell (a segment is `sub` cells)
         self.points, self.lo, self.hi, self.levels, self.value_fmt = points, lo, hi, levels, value_fmt
         n, N = self.name, self.N
-        self.w, self.h = cw * (points - 1), h
+        self.w, self.h = cw * sub * (points - 1), h
         self.pad = int(width) + 1
         self.sprite(ChartBackground(self.gfx(f"bg_{self.w}x{h}"), self.png(f"bg_{self.w}x{h}"), self.w, h, y_div, points - 1 if points <= 13 else 0))
         b.icon(f"{n}_bg", x, y, self.gfx(f"bg_{self.w}x{h}"), frame=None)
@@ -392,9 +401,10 @@ class LineChart(Chart):
                                                     colortwo=tuple(round(c / 255, 3) for c in rgb) + (1,)))
                 fmax = 1000000
             for i in range(points - 1):
-                b.icon(f"{n}_s{s}_{i}", x + i * cw, y, spr.name, frame=1 if mode == "sprite" else 0,
-                       frame_var=self.frame_var(f"{n}_f{s}_{i}", fmax), tooltip=f"{N}_PT{s}_{i}",
-                       visible=f"check_variable = {{ {se['array']}^num > {i + 1} }}", w=cw, h=h)
+                for j in range(self.sub):
+                    b.icon(self.cell_name(s, i, j), x + (i * self.sub + j) * cw, y, spr.name, frame=1 if mode == "sprite" else 0,
+                           frame_var=self.frame_var(self.cell_var(s, i, j), fmax), tooltip=f"{N}_PT{s}_{i}",
+                           visible=f"check_variable = {{ {se['array']}^num > {i + 1} }}", w=cw, h=h)
                 self.loc(f"{N}_PT{s}_{i}", f"§Y{se.get('label', se['array'])}§!: §Y[?{n}_v{s}_{i}|{value_fmt}]§!")
         if labels:
             b.text(f"{n}_hi", x + 3, y + 2, f"{N}_HI", 70, 16)
@@ -403,6 +413,12 @@ class LineChart(Chart):
             self.loc(f"{N}_HI", f"§g[?{n}_hi|{value_fmt}]§!")
             self.loc(f"{N}_MID", f"§g[?{n}_mid|{value_fmt}]§!")
             self.loc(f"{N}_LO", f"§g[?{n}_lo|{value_fmt}]§!")
+
+    def cell_name(self, s, i, j):
+        return f"{self.name}_s{s}_{i}" if self.sub == 1 else f"{self.name}_s{s}_{i}_{j}"
+
+    def cell_var(self, s, i, j):
+        return f"{self.name}_f{s}_{i}" if self.sub == 1 else f"{self.name}_f{s}_{i}_{j}"
 
     @property
     def record(self):
@@ -443,20 +459,40 @@ class LineChart(Chart):
         scale = self.levels - 1 if self.mode == "sprite" else self.h - 2 * self.pad
         mult = self.levels if self.mode == "sprite" else 1000
         off = 0 if self.mode == "sprite" else self.pad
+        from .pdxscript import indent
+
+        def level(tv):
+            return (f"subtract_from_temp_variable = {{ {tv} = {lo} }}\n"
+                    f"multiply_temp_variable = {{ {tv} = {scale} }}\ndivide_temp_variable = {{ {tv} = {rng} }}\n"
+                    f"round_temp_variable = {tv}\nclamp_temp_variable = {{ var = {tv} min = 0 max = {scale} }}\n"
+                    + (f"add_to_temp_variable = {{ {tv} = {off} }}\n" if off else ""))
+
+        def point(tv, frac):
+            """tv = the value at `frac` (0..1) along the segment (gg_r0 + gg_rd * frac)."""
+            if frac == 0:
+                return f"set_temp_variable = {{ {tv} = gg_r0 }}\n"
+            if frac == 1:
+                return f"set_temp_variable = {{ {tv} = gg_r1 }}\n"
+            return (f"set_temp_variable = {{ {tv} = gg_rd }}\nmultiply_temp_variable = {{ {tv} = {num(round(frac, 4))} }}\n"
+                    f"add_to_temp_variable = {{ {tv} = gg_r0 }}\n")
+
         for si, se in enumerate(self.series):
             a = se["array"]
             for i in range(self.points - 1):
-                f = f"{n}_f{si}_{i}"
                 body = ""
-                for tv, idx in (("gg_a", i), ("gg_b", i + 1)):
-                    body += (f"set_temp_variable = {{ {tv} = {a}^{idx} }}\nsubtract_from_temp_variable = {{ {tv} = {lo} }}\n"
-                             f"multiply_temp_variable = {{ {tv} = {scale} }}\ndivide_temp_variable = {{ {tv} = {rng} }}\n"
-                             f"round_temp_variable = {tv}\nclamp_temp_variable = {{ var = {tv} min = 0 max = {scale} }}\n"
-                             + (f"add_to_temp_variable = {{ {tv} = {off} }}\n" if off else ""))
-                body += (f"set_variable = {{ {f} = gg_a }}\nmultiply_variable = {{ {f} = {mult} }}\nadd_to_variable = {{ {f} = gg_b }}\n"
-                         + ("add_to_variable = { %s = 1 }\n" % f if self.mode == "sprite" else "")
-                         + f"set_variable = {{ {n}_v{si}_{i} = {a}^{i} }}\n")
-                from .pdxscript import indent
+                if self.sub == 1:
+                    for tv, idx in (("gg_a", i), ("gg_b", i + 1)):
+                        body += f"set_temp_variable = {{ {tv} = {a}^{idx} }}\n" + level(tv)
+                else:
+                    body += (f"set_temp_variable = {{ gg_r0 = {a}^{i} }}\nset_temp_variable = {{ gg_r1 = {a}^{i + 1} }}\n"
+                             f"set_temp_variable = {{ gg_rd = gg_r1 }}\nsubtract_from_temp_variable = {{ gg_rd = gg_r0 }}\n")
+                for j in range(self.sub):
+                    f = self.cell_var(si, i, j)
+                    if self.sub > 1:
+                        body += point("gg_a", j / self.sub) + level("gg_a") + point("gg_b", (j + 1) / self.sub) + level("gg_b")
+                    body += (f"set_variable = {{ {f} = gg_a }}\nmultiply_variable = {{ {f} = {mult} }}\nadd_to_variable = {{ {f} = gg_b }}\n"
+                             + ("add_to_variable = { %s = 1 }\n" % f if self.mode == "sprite" else ""))
+                body += f"set_variable = {{ {n}_v{si}_{i} = {a}^{i} }}\n"
                 s += f"if = {{\n\tlimit = {{ check_variable = {{ {a}^num > {i + 1} }} }}\n{indent(body, 1)}}}\n"
         return s
 
@@ -480,8 +516,12 @@ class LineChart(Chart):
         for si, arr in enumerate(arrays):
             for i in range(self.points - 1):
                 if len(arr) > i + 1:
-                    a, b_ = lvl(arr[i]), lvl(arr[i + 1])
-                    out[f"{n}_f{si}_{i}"] = LineSegments.frame_of(a, b_, self.levels) if self.mode == "sprite" else line_frame(a, b_)
+                    r0, r1 = arr[i], arr[i + 1]
+                    for j in range(self.sub):
+                        v0 = r0 + (r1 - r0) * round(j / self.sub, 4) if 0 < j else r0
+                        v1 = r1 if j + 1 == self.sub else r0 + (r1 - r0) * round((j + 1) / self.sub, 4)
+                        a, b_ = lvl(v0), lvl(v1)
+                        out[self.cell_var(si, i, j)] = LineSegments.frame_of(a, b_, self.levels) if self.mode == "sprite" else line_frame(a, b_)
                     out[f"{n}_v{si}_{i}"] = arr[i]
         return out
 

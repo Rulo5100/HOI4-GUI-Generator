@@ -52,6 +52,9 @@ class BitmapFont:
                 kv = dict(re.findall(r'(\w+)=("[^"]*"|\S+)', rest))
                 if kind == "common":
                     self.size, self.base = int(kv["lineHeight"]), int(kv["base"])
+                    # BMFont channels: 0 glyph, 1 outline, 2 glyph + outline, 3 zero, 4 one. The game's
+                    # outlined fonts keep glyph + dark outline in alpha and the (shaded) glyph in red.
+                    self.outlined = kv.get("alphaChnl") in ("1", "2") and kv.get("redChnl") in ("0", "2")
                 elif kind == "page" and kv.get("id") == "0":
                     page = kv["file"].strip('"')
                 elif kind == "char":
@@ -60,10 +63,31 @@ class BitmapFont:
                     self.kern[(int(kv["first"]), int(kv["second"]))] = int(kv["amount"])
         self.page = Image.open(os.path.join(os.path.dirname(fnt_path), page)).convert("RGBA")
         self.lineheight = self.size
+        self.outlined = getattr(self, "outlined", False)
         self._glyphs = {}
 
     def _char(self, c):
         return self.chars.get(ord(c)) or self.chars.get(ord("?"))
+
+    def glyph(self, box, colour):
+        """The glyph tinted the way the game does: colour x shading (red channel) over a dark outline
+        (alpha) for outlined fonts; a flat colour through alpha otherwise."""
+        key = (box, colour)
+        g = self._glyphs.get(key)
+        if g is None:
+            gx, gy, gw, gh = box
+            cell = self.page.crop((gx, gy, gx + gw, gy + gh))
+            a = cell.getchannel("A")
+            if self.outlined:
+                from PIL import ImageChops
+                shade = cell.getchannel("R")
+                rgb = [ImageChops.multiply(shade, Image.new("L", (gw, gh), c)) for c in colour]
+                g = Image.merge("RGBA", rgb + [a])
+            else:
+                g = Image.new("RGBA", (gw, gh), colour + (255,))
+                g.putalpha(a)
+            self._glyphs[key] = g
+        return g
 
     def getlength(self, s):
         w, prev = 0, None
@@ -85,12 +109,7 @@ class BitmapFont:
                 x += self.kern.get((prev, ord(c)), 0)
             gx, gy, gw, gh, xo, yo, adv = ch
             if gw and gh:
-                key = (gx, gy, gw, gh)
-                if key not in self._glyphs:
-                    self._glyphs[key] = self.page.crop((gx, gy, gx + gw, gy + gh)).getchannel("A")
-                mask = self._glyphs[key]
-                glyph = Image.new("RGBA", (gw, gh), tuple(fill) + (255,))
-                glyph.putalpha(mask)
+                glyph = self.glyph((gx, gy, gw, gh), tuple(fill[:3]))
                 px, py = int(x + xo), int(y + yo)
                 if px >= 0 and py >= 0 and px + gw <= img.width and py + gh <= img.height:
                     img.alpha_composite(glyph, (px, py))
